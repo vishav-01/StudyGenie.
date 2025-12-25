@@ -3,6 +3,11 @@ import requests
 import random
 
 # =====================================================
+# SHOW ERRORS (NO BLANK SCREEN)
+# =====================================================
+st.set_option("client.showErrorDetails", True)
+
+# =====================================================
 # PAGE CONFIG
 # =====================================================
 st.set_page_config(
@@ -11,7 +16,7 @@ st.set_page_config(
 )
 
 # =====================================================
-# THEME SYSTEM
+# SIDEBAR THEME
 # =====================================================
 theme = st.sidebar.selectbox(
     "🌈 Choose Theme",
@@ -36,19 +41,18 @@ st.markdown(
     <style>
     .stApp {{
         background: linear-gradient(135deg, {grad_start}, {grad_end});
-        color: black;
     }}
     section[data-testid="stSidebar"] {{
-        background: rgba(255,255,255,0.35);
+        background: rgba(255,255,255,0.4);
         backdrop-filter: blur(6px);
     }}
-    html, body, [class*="css"] {{
-        font-family: 'Poppins', sans-serif;
+    html, body {{
+        font-family: Poppins, sans-serif;
     }}
     .question-box {{
         padding: 20px;
         background: white;
-        border-radius: 18px;
+        border-radius: 16px;
         font-size: 18px;
     }}
     </style>
@@ -60,7 +64,7 @@ st.markdown(
 # SIDEBAR
 # =====================================================
 with st.sidebar:
-    st.title("😘 StudyGenie — Your AI Bestie 💖")
+    st.title("😘 StudyGenie 💖")
     tool = st.radio(
         "Choose a Tool ✨",
         [
@@ -86,51 +90,43 @@ with st.sidebar:
 # =====================================================
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
-if "clear_input" not in st.session_state:
-    st.session_state.clear_input = False
-if "last_prompt" not in st.session_state:
-    st.session_state.last_prompt = ""
 
 # =====================================================
-# GEMINI AI FUNCTION
+# GEMINI API (ULTRA SAFE)
 # =====================================================
 def ask_ai(prompt):
-    api_key = st.secrets["GEMINI_API_KEY"]
-
-    url = (
-        "https://generativelanguage.googleapis.com/v1beta/models/"
-        "gemini-1.5-flash:generateContent"
-        f"?key={api_key}"
-    )
-
-    payload = {
-        "contents": [
-            {
-                "role": "user",
-                "parts": [{"text": prompt}]
-            }
-        ],
-        "generationConfig": {
-            "temperature": 0.65,
-            "topP": 0.9,
-            "maxOutputTokens": 3000
-        }
-    }
-
     try:
-        r = requests.post(url, json=payload, timeout=20)
-        data = r.json()
+        api_key = st.secrets.get("GEMINI_API_KEY")
+
+        if not api_key:
+            return "❌ Gemini API key missing."
+
+        url = (
+            "https://generativelanguage.googleapis.com/"
+            "v1beta/models/gemini-1.5-flash:generateContent"
+            f"?key={api_key}"
+        )
+
+        payload = {
+            "contents": [
+                {"parts": [{"text": prompt}]}
+            ]
+        }
+
+        res = requests.post(url, json=payload, timeout=15)
+        data = res.json()
 
         if "candidates" not in data:
-            return "⚠️ Genie is tired bestie 😭"
+            return "⚠️ No response from Gemini."
 
-        reply = data["candidates"][0]["content"]["parts"][0]["text"]
+        candidate = data["candidates"][0]
+        content = candidate.get("content", {})
+        parts = content.get("parts", [])
 
-        st.session_state.chat_history.append(
-            {"you": prompt, "ai": reply}
-        )
-        st.session_state.clear_input = True
-        return reply
+        if not parts:
+            return "⚠️ Gemini returned empty output."
+
+        return parts[0].get("text", "⚠️ No text.")
 
     except Exception as e:
         return f"❌ Error: {e}"
@@ -149,74 +145,48 @@ if tool != "Mini IQ Test Game 🧠":
         st.markdown(f"**You:** {chat['you']}")
         st.markdown(f"**Genie:** {chat['ai']}")
 
-    text_value = "" if st.session_state.clear_input else st.session_state.last_prompt
-    prompt = st.text_area("Type your message 💬", value=text_value)
-    st.session_state.last_prompt = prompt
+    prompt = st.text_area("Type your message 💬")
 
     if st.button("Send 💌"):
         if prompt.strip():
-            response = ask_ai(f"{tool}: {prompt}")
-            st.markdown(f"**Genie:** {response}")
-            st.session_state.last_prompt = ""
+            reply = ask_ai(f"{tool}: {prompt}")
+            st.session_state.chat_history.append(
+                {"you": prompt, "ai": reply}
+            )
+            st.rerun()
 
-    if st.button("Clear Chat History 🧹"):
+    if st.button("Clear Chat 🧹"):
         st.session_state.chat_history = []
-        st.session_state.last_prompt = ""
-        st.session_state.clear_input = True
         st.rerun()
 
 # =====================================================
-# MINI IQ TEST GAME
+# MINI IQ GAME
 # =====================================================
 if tool == "Mini IQ Test Game 🧠":
 
-    st.markdown(
-        "<h1 style='text-align:center;'>🧠 Mini IQ Test</h1>",
-        unsafe_allow_html=True
-    )
+    st.markdown("<h1 style='text-align:center;'>🧠 Mini IQ Test</h1>", unsafe_allow_html=True)
 
-    iq_mcq = [
-        ("What number comes next? 2, 6, 12, 20, 30, __",
-         ["36", "40", "42", "44"], "42"),
-        ("Which one is different?",
-         ["Cat", "Dog", "Lion", "Wolf"], "Cat"),
-        ("ALL roses are flowers. SOME flowers fade quickly.",
-         ["All roses fade quickly", "Some roses may fade quickly", "No roses fade quickly"],
-         "Some roses may fade quickly"),
-        ("A, D, G, J, M, __",
-         ["N", "O", "P", "Q"], "P"),
-        ("Odd one out: 27, 64, 125, 144, 216",
-         ["27", "64", "144", "216"], "144"),
-        ("Which is larger?",
-         ["3/7", "4/9"], "4/9"),
-        ("(3×4)² ÷ 6 =",
-         ["12", "24", "36", "48"], "24"),
-        ("Sun : Day :: Moon : __",
-         ["Light", "Sky", "Night", "Dark"], "Night"),
-        ("Which weighs more?",
-         ["1 kg iron", "1 kg cotton", "Same"], "Same"),
-        ("45% of 200 =",
-         ["70", "80", "90", "100"], "90")
+    questions = [
+        ("2, 6, 12, 20, 30, ?", ["36", "40", "42", "44"], "42"),
+        ("Odd one out?", ["Cat", "Dog", "Lion", "Wolf"], "Cat"),
+        ("A, D, G, J, M, ?", ["N", "O", "P", "Q"], "P"),
+        ("Which is larger?", ["3/7", "4/9"], "4/9"),
+        ("45% of 200?", ["70", "80", "90", "100"], "90")
     ]
 
-    if "current_q" not in st.session_state:
-        st.session_state.current_q = random.choice(iq_mcq)
+    if "q" not in st.session_state:
+        st.session_state.q = random.choice(questions)
 
-    q, options, ans = st.session_state.current_q
+    q, options, ans = st.session_state.q
+    st.markdown(f"<div class='question-box'>{q}</div>", unsafe_allow_html=True)
+    choice = st.radio("Choose:", options)
 
-    st.markdown(
-        f"<div class='question-box'>{q}</div>",
-        unsafe_allow_html=True
-    )
-
-    choice = st.radio("Choose one:", options)
-
-    if st.button("Submit Answer ✅"):
+    if st.button("Submit"):
         if choice == ans:
-            st.success("🔥 Correct bestie!! Big brain energy 💙")
+            st.success("🔥 Correct! Big brain energy 💙")
         else:
-            st.error(f"😭 Wrong… Correct answer: **{ans}**")
+            st.error(f"❌ Wrong! Answer: {ans}")
 
-    if st.button("Next Question ➡️"):
-        st.session_state.current_q = random.choice(iq_mcq)
+    if st.button("Next Question"):
+        st.session_state.q = random.choice(questions)
         st.rerun()
